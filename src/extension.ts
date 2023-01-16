@@ -2,20 +2,142 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { SerialPort } from 'serialport';
-import { autoDetect } from '@serialport/bindings-cpp'
+import { autoDetect, PortInfo } from '@serialport/bindings-cpp'
+
+import * as fs from "fs";
+import { join } from 'path';
 
 import { MPWorkspace } from './WorkSpace';
 import { Board } from './board';
+
 
 let myStatusBarItem: vscode.StatusBarItem;
 
 let workFolder: string;
 
+
+let portString = "";
+let baudrateString = "";
+
+/* 
+
 const port = new SerialPort({ path: 'COM35', baudRate: 115200 }, function (err) {
 	if (err) {
 		return console.log('Error: ', err.message)
 	}
-})
+}) */
+
+let globalPort;
+
+function errorPort(error: Error | null) {
+	if (error == null) return;
+	vscode.window.showInformationMessage('El puerto ingresado no sirve o está ocupado');
+
+	portString = "";
+	baudrateString = "";
+	console.error(error);
+	setPlaceHolder();
+}
+
+function setPlaceHolder() {
+	if (portPrompt != undefined)
+		portPrompt.placeholder = portString;
+
+	if (bratePrompt != undefined)
+		bratePrompt.placeholder = baudrateString;
+
+}
+function testConnection() {
+	if (portString.length == 0) {
+		portPrompt.show();
+		return;
+	}
+
+	if (baudrateString.length == 0) {
+		bratePrompt.show();
+		return;
+	}
+
+	globalPort = new SerialPort({
+		path: portString,
+		baudRate: Number(baudrateString)
+	}, errorPort);
+}
+
+let portPrompt: vscode.InputBox;
+let bratePrompt: vscode.InputBox;
+
+let portListPrompt: vscode.QuickPick<vscode.QuickPickItem>;
+
+function prepareUI() {
+
+	portListPrompt = vscode.window.createQuickPick();
+	portListPrompt.canSelectMany = false;
+	portListPrompt.onDidChangeSelection(selection => {
+		portString = selection[0].label;
+
+	});
+	portListPrompt.onDidHide(() => portListPrompt.dispose());
+	portListPrompt.onDidAccept((e: void) => {
+
+		portString = portListPrompt.selectedItems[0].label;
+		portListPrompt.dispose();
+		if (baudrateString.length == 0) {
+			bratePrompt.show();
+		} else {
+			testConnection();
+		}
+	});
+
+	portPrompt = vscode.window.createInputBox();
+	portPrompt.prompt = "Selecciona un Puerto";
+	portPrompt.onDidHide(() => portPrompt.dispose());
+
+	portPrompt.onDidAccept((e: void) => {
+		portString = portPrompt.value;
+		console.log(portPrompt.value);
+		portPrompt.dispose();
+		if (baudrateString.length == 0) {
+			bratePrompt.show();
+		}
+	});
+
+	bratePrompt = vscode.window.createInputBox();
+	bratePrompt.prompt = "Ingrese la velocidad";
+	bratePrompt.placeholder = "115200";
+	bratePrompt.onDidHide(() => bratePrompt.dispose());
+
+	bratePrompt.onDidAccept((e: void) => {
+
+		baudrateString = bratePrompt.value;
+		bratePrompt.dispose();
+
+		testConnection();
+	});
+}
+
+function checkConfigFile(workFolder: string) {
+	let folder = join(workFolder, ".vscode");
+	if (fs.existsSync(folder)) {
+		let fileSetting = join(folder, "mpshell.json");
+		if (fs.existsSync(fileSetting)) {
+			const setting = fs.readFileSync(fileSetting).toString();
+			const json = JSON.parse(setting);
+
+			baudrateString = json.baudrate;
+			portString = json.port;
+
+			setPlaceHolder();
+
+			console.log(baudrateString, portString);
+		} else {
+			console.log("Crear archvo")
+		}
+	} else {
+		//Crear directorio
+		console.log("Crear directorio");
+	}
+}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -26,9 +148,18 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "mpshell" is now active!');
 
 	let temp = vscode.workspace.workspaceFolders;
-	if (temp != undefined)
-		workFolder = temp[0].uri.fsPath;
+	if (temp != undefined) {
+		if (temp.length > 1) {
+			vscode.window.showInformationMessage('No se poyi');
+		} else {
+			workFolder = temp[0].uri.fsPath;
 
+			checkConfigFile(workFolder)
+		}
+	}
+
+
+	prepareUI();
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
@@ -39,26 +170,34 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Hello World from mpShell!');
 		console.log(MPWorkspace.rootPath);
 
-		port.open();
-
-		let board = new Board(port);
-
-		board.sendTest();
-
-		port.close();
 
 	});
 
+
+	//
+
 	let myCommandId = "mpshell.syncdata";
 	let syncdata = vscode.commands.registerCommand(myCommandId, async () => {
+		SerialPort.list().then((lista) => {
+			let items: vscode.QuickPickItem[];
 
-		const ports = await SerialPort.list();
 
-		console.log(ports);
-		/* 
+
+			portListPrompt.items = lista.map(
+				element => ({ label: element.path })
+			);
+			portListPrompt.show();
+
+		});
+
+		//const ports = await SerialPort.list();
+
+		//console.log(ports);
+		/*
 		SerialPort.list().then((value: PortInfo[]): void => {
 
 		}).catch((reason: any) => { }); */
+
 
 	});
 
@@ -91,3 +230,5 @@ function updateStatusBarItem(): void {
 
 // This method is called when your extension is deactivated
 export function deactivate() { }
+
+
