@@ -9,7 +9,7 @@ import { join } from 'path';
 
 import { MPWorkspace } from './WorkSpace';
 import { Board } from './board';
-import { DepNodeProvider } from './depNodeProvider';
+import { Archivo, DepNodeProvider } from './depNodeProvider';
 
 
 const SYNC_DATA_ID = "mpshell.syncdata";
@@ -138,8 +138,9 @@ function prepareUI() {
 	listFileBarItem.command = LIST_FILES_ID;
 
 
-	const nodeDependenciesProvider = new DepNodeProvider("Este");
-	vscode.window.registerTreeDataProvider('fileList', nodeDependenciesProvider);
+	const listaDeArchivos = new DepNodeProvider("Este");
+	
+	vscode.window.registerTreeDataProvider('fileList', listaDeArchivos);
 }
 
 function checkConfigFile(workFolder: string) {
@@ -277,8 +278,13 @@ export function activate(context: vscode.ExtensionContext) {
 		ListFiles
 	);
 
+	let obtenercommand = vscode.commands.registerCommand(
+		"fileList.obtener",
+		(node:Archivo)=>{console.log(node)}
+	);
 
 	context.subscriptions.push(send_current_file);
+	context.subscriptions.push(obtenercommand);
 	context.subscriptions.push(disposable);
 	context.subscriptions.push(select_port);
 	context.subscriptions.push(list_files);
