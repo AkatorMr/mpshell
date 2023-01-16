@@ -11,26 +11,32 @@ import { MPWorkspace } from './WorkSpace';
 import { Board } from './board';
 
 
+const SYNC_DATA_ID = "mpshell.syncdata";
+const CONNECT_ID = "mpshell.connect";
+const SELECT_PORT_ID = "mpshell.selectport";
+const SEND_CURRENT_FILE_ID = "mpshell.sendcurrentfile";
+const LIST_FILES_ID = "mpshell.listfiles";
+
+
+
 let myStatusBarItem: vscode.StatusBarItem;
+let listFileBarItem: vscode.StatusBarItem;
 
 let workFolder: string;
 
-
+//Control de los puertos
 let portString = "";
 let baudrateString = "";
+let globalReady: boolean = false;
 
-/* 
-
-const port = new SerialPort({ path: 'COM35', baudRate: 115200 }, function (err) {
-	if (err) {
-		return console.log('Error: ', err.message)
-	}
-}) */
-
-let globalPort;
+let globalPort: SerialPort;
 
 function errorPort(error: Error | null) {
-	if (error == null) return;
+	if (error == null) {
+		globalReady = true;
+		return
+	};
+	globalReady = false;
 	vscode.window.showInformationMessage('El puerto ingresado no sirve o está ocupado');
 
 	portString = "";
@@ -114,9 +120,25 @@ function prepareUI() {
 
 		testConnection();
 	});
+
+
+
+	// create a new status bar item that we can now manage
+	myStatusBarItem = vscode.window.createStatusBarItem(
+		vscode.StatusBarAlignment.Right,
+		100
+	);
+	myStatusBarItem.command = SEND_CURRENT_FILE_ID;
+
+	listFileBarItem = vscode.window.createStatusBarItem(
+		vscode.StatusBarAlignment.Right,
+		105
+	);
+	listFileBarItem.command = LIST_FILES_ID;
 }
 
 function checkConfigFile(workFolder: string) {
+
 	let folder = join(workFolder, ".vscode");
 	if (fs.existsSync(folder)) {
 		let fileSetting = join(folder, "mpshell.json");
@@ -138,6 +160,61 @@ function checkConfigFile(workFolder: string) {
 		console.log("Crear directorio");
 	}
 }
+
+function isConnected(): boolean {
+	return globalReady;
+}
+
+async function SyncData() {
+
+}
+
+async function Connect() {
+
+}
+
+async function ListFiles() {
+	if (!isConnected()) return;
+
+	//UpdateListFiles evento
+	ListFilesHandler(["uno", "dos", "tres"]);
+}
+
+function ListFilesHandler(files: string[]) {
+	//vscode.window.createWebviewPanel("webView","Lista de archivos",)
+}
+
+
+async function SendcurrentFile() {
+
+	if (!isConnected()) return;
+
+	let current_doc = vscode.window.activeTextEditor?.document.fileName;
+	if (!current_doc?.endsWith(".py")) return;
+
+
+	const contenido = fs.readFileSync(current_doc, 'ascii');
+	let fileName = current_doc.substring(workFolder.length + 1);
+	fileName.replace("\\", "/");
+	//Subir current file
+
+}
+
+async function SelectPort() {
+	SerialPort.list().then((lista) => {
+
+		portListPrompt.items = lista.map(
+			element => ({ label: element.path })
+		);
+		if (lista.length == 0) {
+			portPrompt.show();
+		} else {
+			portListPrompt.show();
+		}
+	});
+}
+
+
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -176,37 +253,31 @@ export function activate(context: vscode.ExtensionContext) {
 
 	//
 
-	let myCommandId = "mpshell.syncdata";
-	let syncdata = vscode.commands.registerCommand(myCommandId, async () => {
-		SerialPort.list().then((lista) => {
-			let items: vscode.QuickPickItem[];
+
+	let syncdata = vscode.commands.registerCommand(
+		SYNC_DATA_ID,
+		SyncData
+	);
+
+	let select_port = vscode.commands.registerCommand(
+		SELECT_PORT_ID,
+		SelectPort
+	);
+	let send_current_file = vscode.commands.registerCommand(
+		SEND_CURRENT_FILE_ID,
+		SendcurrentFile
+	);
+	let list_files = vscode.commands.registerCommand(
+		LIST_FILES_ID,
+		ListFiles
+	);
 
 
-
-			portListPrompt.items = lista.map(
-				element => ({ label: element.path })
-			);
-			portListPrompt.show();
-
-		});
-
-		//const ports = await SerialPort.list();
-
-		//console.log(ports);
-		/*
-		SerialPort.list().then((value: PortInfo[]): void => {
-
-		}).catch((reason: any) => { }); */
-
-
-	});
-
+	context.subscriptions.push(send_current_file);
 	context.subscriptions.push(disposable);
+	context.subscriptions.push(select_port);
+	context.subscriptions.push(list_files);
 	context.subscriptions.push(syncdata);
-
-	// create a new status bar item that we can now manage
-	myStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	myStatusBarItem.command = myCommandId;
 	context.subscriptions.push(myStatusBarItem);
 
 	// register some listener that make sure the status bar 
@@ -221,14 +292,20 @@ export function activate(context: vscode.ExtensionContext) {
 function updateStatusBarItem(): void {
 	const n = 5;
 	if (n > 0) {
-		myStatusBarItem.text = `$(megaphone) ${n} line(s) selected`;
+		listFileBarItem.text = "Mostrar textos";
+		myStatusBarItem.text = `$(file) $(terminal) $(folder) ${n} line(s) selected`;
 		myStatusBarItem.show();
+		listFileBarItem.show();
 	} else {
 		myStatusBarItem.hide();
 	}
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {
+	if (globalPort.isOpen) {
+		globalPort.close();
+	}
+}
 
 
