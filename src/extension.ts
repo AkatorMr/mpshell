@@ -9,6 +9,7 @@ import { join } from 'path';
 
 import { MPWorkspace } from './WorkSpace';
 import { Board } from './board';
+import { DepNodeProvider } from './depNodeProvider';
 
 
 const SYNC_DATA_ID = "mpshell.syncdata";
@@ -135,6 +136,10 @@ function prepareUI() {
 		105
 	);
 	listFileBarItem.command = LIST_FILES_ID;
+
+
+	const nodeDependenciesProvider = new DepNodeProvider("Este");
+	vscode.window.registerTreeDataProvider('fileList', nodeDependenciesProvider);
 }
 
 function checkConfigFile(workFolder: string) {
