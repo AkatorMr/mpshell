@@ -7,21 +7,21 @@ import { autoDetect, PortInfo } from '@serialport/bindings-cpp'
 import * as fs from "fs";
 import { join } from 'path';
 
-import { MPWorkspace } from './WorkSpace';
-import { Board } from './board';
 import { Archivo, DepNodeProvider } from './depNodeProvider';
 
 
 const SYNC_DATA_ID = "mpshell.syncdata";
 const CONNECT_ID = "mpshell.connect";
+const CHANGE_SETTING_ID = "mpshell.changesetting";
 const SELECT_PORT_ID = "mpshell.selectport";
 const SEND_CURRENT_FILE_ID = "mpshell.sendcurrentfile";
 const LIST_FILES_ID = "mpshell.listfiles";
 
 
 
-let myStatusBarItem: vscode.StatusBarItem;
+let sendCurrentBarItem: vscode.StatusBarItem;
 let listFileBarItem: vscode.StatusBarItem;
+let changeSettings: vscode.StatusBarItem;
 
 let workFolder: string;
 
@@ -69,6 +69,8 @@ function testConnection() {
 		path: portString,
 		baudRate: Number(baudrateString)
 	}, errorPort);
+
+
 }
 
 let portPrompt: vscode.InputBox;
@@ -125,21 +127,31 @@ function prepareUI() {
 
 
 	// create a new status bar item that we can now manage
-	myStatusBarItem = vscode.window.createStatusBarItem(
+	sendCurrentBarItem = vscode.window.createStatusBarItem(
 		vscode.StatusBarAlignment.Right,
-		100
+		105
 	);
-	myStatusBarItem.command = SEND_CURRENT_FILE_ID;
+	sendCurrentBarItem.command = SEND_CURRENT_FILE_ID;
 
 	listFileBarItem = vscode.window.createStatusBarItem(
 		vscode.StatusBarAlignment.Right,
 		105
 	);
 	listFileBarItem.command = LIST_FILES_ID;
+	listFileBarItem.text = `$(folder) Listar archivos`;
+	listFileBarItem.show();
 
+
+	changeSettings = vscode.window.createStatusBarItem(
+		vscode.StatusBarAlignment.Right,
+		105
+	);
+	changeSettings.command = CHANGE_SETTING_ID;
+	changeSettings.text = `$(gear) Cambiar configuración`;
+	changeSettings.show();
 
 	const listaDeArchivos = new DepNodeProvider("Este");
-	
+
 	vscode.window.registerTreeDataProvider('fileList', listaDeArchivos);
 }
 
@@ -171,6 +183,9 @@ function isConnected(): boolean {
 	return globalReady;
 }
 
+async function CambiarConfig() {
+
+}
 async function SyncData() {
 
 }
@@ -220,6 +235,10 @@ async function SelectPort() {
 	});
 }
 
+async function ObtenerArchivo(archivo: Archivo) {
+	let path = archivo.path;
+	//FileContent evento donde se obtiene el archivo
+}
 
 
 // This method is called when your extension is activated
@@ -251,7 +270,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from mpShell!');
-		console.log(MPWorkspace.rootPath);
+
 
 
 	});
@@ -263,6 +282,15 @@ export function activate(context: vscode.ExtensionContext) {
 	let syncdata = vscode.commands.registerCommand(
 		SYNC_DATA_ID,
 		SyncData
+	);
+	let changesettin = vscode.commands.registerCommand(
+		CHANGE_SETTING_ID,
+		() => {
+			baudrateString = "";
+			portString = "";
+			setPlaceHolder();
+			SelectPort();
+		}
 	);
 
 	let select_port = vscode.commands.registerCommand(
@@ -280,35 +308,48 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let obtenercommand = vscode.commands.registerCommand(
 		"fileList.obtener",
-		(node:Archivo)=>{console.log(node)}
+		ObtenerArchivo
 	);
 
 	context.subscriptions.push(send_current_file);
+	context.subscriptions.push(changesettin);
 	context.subscriptions.push(obtenercommand);
 	context.subscriptions.push(disposable);
 	context.subscriptions.push(select_port);
 	context.subscriptions.push(list_files);
 	context.subscriptions.push(syncdata);
-	context.subscriptions.push(myStatusBarItem);
+	context.subscriptions.push(sendCurrentBarItem);
 
 	// register some listener that make sure the status bar 
 	// item always up-to-date
-	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateStatusBarItem));
-	context.subscriptions.push(vscode.window.onDidChangeTextEditorSelection(updateStatusBarItem));
 
-	// update status bar item once at start
-	updateStatusBarItem();
+	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(showUploadFile));
+
 }
+
+function showUploadFile(): void {
+	let current_doc = vscode.window.activeTextEditor?.document.fileName;
+	if (!current_doc?.endsWith(".py")) {
+		sendCurrentBarItem.hide();
+		return;
+	}
+
+	sendCurrentBarItem.text = `$(file) Subir archivo`;
+	sendCurrentBarItem.show();
+
+}
+
+
 
 function updateStatusBarItem(): void {
 	const n = 5;
 	if (n > 0) {
-		listFileBarItem.text = "Mostrar textos";
-		myStatusBarItem.text = `$(file) $(terminal) $(folder) ${n} line(s) selected`;
-		myStatusBarItem.show();
-		listFileBarItem.show();
+		//listFileBarItem.text = "Mostrar textos";
+		sendCurrentBarItem.text = `$(file) $(terminal) $(folder) ${n} line(s) selected`;
+		sendCurrentBarItem.show();
+		//listFileBarItem.show();
 	} else {
-		myStatusBarItem.hide();
+		sendCurrentBarItem.hide();
 	}
 }
 
