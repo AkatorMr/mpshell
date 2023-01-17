@@ -11,7 +11,8 @@
   ],
   "activationEvents": [
     "onCommand:mpshell.selectport",
-    "onCommand:mpshell.syncdata", "onView:fileList"
+    "onCommand:mpshell.syncdata",
+    "onView:fileList"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -20,15 +21,13 @@
         {
           "id": "fileList",
           "name": "Lista de Archivos"
-
-
-      }
-    ]
+        }
+      ]
     },
     "commands": [
       {
         "command": "fileList.obtener",
-        "title": "Obtener archivo"
+        "title": "Obtener"
       },
       {
         "command": "mpshell.selectport",
@@ -39,14 +38,27 @@
         "title": "Sync Files"
       },
       {
+        "command": "mpshell.changesetting",
+        "title": "Modificar configuración"
+      },
+      {
         "command": "mpshell.sendcurrentfile",
         "title": "Send current file"
       }
-    ]
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "fileList.obtener",
+          "group": "inline",
+          "when": "view == fileList && viewItem == archivo"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "copy \"%CD%\\src\\command\\*.*\" \"%CD%\\out\\command\\\" && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",

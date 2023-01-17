@@ -10,10 +10,20 @@ export class DepNodeProvider implements vscode.TreeDataProvider<Archivo> {
     Archivo | undefined | void
   > = this._onDidChangeTreeData.event
 
+  private _list: string[] = [];
+
   constructor(private workspaceRoot: string | undefined) {
 
   }
+  public updateList(data: string[]) {
+    this._list = [];
+    data.forEach(element => {
+      this._list.push(element);
+    });
 
+    this.refresh();
+
+  }
   refresh(): void {
     this._onDidChangeTreeData.fire()
   }
@@ -31,17 +41,13 @@ export class DepNodeProvider implements vscode.TreeDataProvider<Archivo> {
    */
   private getDepsInPackageJson(): Archivo[] {
     let list: Archivo[] = []
+    this._list.forEach(element => {
+      list.push(
+        new Archivo(element, vscode.TreeItemCollapsibleState.None),
+      );
+    });
 
-    list.push(
-      new Archivo('main.py', vscode.TreeItemCollapsibleState.None),
-    )
-    list.push(
-      new Archivo('boot.py', vscode.TreeItemCollapsibleState.None),
-    )
-    list.push(
-      new Archivo('fo/bar.py', vscode.TreeItemCollapsibleState.None),
-    )
-    
+
 
     return list
   }
@@ -56,8 +62,12 @@ export class Archivo extends vscode.TreeItem {
     super(path, collapsibleState)
 
     this.tooltip = `${this.label}`
+    /* this.command = {
+      command: "fileList.obtener",
+      title: "",
+      arguments: [path]
+    } */
 
-    
   }
 
   contextValue = 'archivo'

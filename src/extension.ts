@@ -8,6 +8,7 @@ import * as fs from "fs";
 import { join } from 'path';
 
 import { Archivo, DepNodeProvider } from './depNodeProvider';
+import { Dispositivo } from './device';
 
 
 const SYNC_DATA_ID = "mpshell.syncdata";
@@ -31,10 +32,12 @@ let baudrateString = "";
 let globalReady: boolean = false;
 
 let globalPort: SerialPort;
+let globalDevice: Dispositivo;
 
 function errorPort(error: Error | null) {
 	if (error == null) {
 		globalReady = true;
+		globalDevice = new Dispositivo(globalPort);
 		return
 	};
 	globalReady = false;
@@ -75,6 +78,7 @@ function testConnection() {
 
 let portPrompt: vscode.InputBox;
 let bratePrompt: vscode.InputBox;
+let listaDeArchivos: DepNodeProvider;
 
 let portListPrompt: vscode.QuickPick<vscode.QuickPickItem>;
 
@@ -150,7 +154,7 @@ function prepareUI() {
 	changeSettings.text = `$(gear) Cambiar configuración`;
 	changeSettings.show();
 
-	const listaDeArchivos = new DepNodeProvider("Este");
+	listaDeArchivos = new DepNodeProvider("Este");
 
 	vscode.window.registerTreeDataProvider('fileList', listaDeArchivos);
 }
@@ -166,7 +170,7 @@ function checkConfigFile(workFolder: string) {
 
 			baudrateString = json.baudrate;
 			portString = json.port;
-
+			testConnection();
 			setPlaceHolder();
 
 			console.log(baudrateString, portString);
@@ -196,13 +200,18 @@ async function Connect() {
 
 async function ListFiles() {
 	if (!isConnected()) return;
-
+	globalDevice.openPort();
+	globalDevice.listFiles()
+	globalDevice.once("UpdateListFiles", ListFilesHandler)
 	//UpdateListFiles evento
-	ListFilesHandler(["uno", "dos", "tres"]);
+	//ListFilesHandler(["uno", "dos", "tres"]);
 }
 
 function ListFilesHandler(files: string[]) {
 	//vscode.window.createWebviewPanel("webView","Lista de archivos",)
+	console.log(files);
+	listaDeArchivos.updateList(files);
+	globalDevice.closePort();
 }
 
 
@@ -218,7 +227,11 @@ async function SendcurrentFile() {
 	let fileName = current_doc.substring(workFolder.length + 1);
 	fileName.replace("\\", "/");
 	//Subir current file
-
+	globalDevice.openPort();
+	globalDevice.sendFile(fileName, contenido);
+	setTimeout(() => {
+		globalDevice.closePort();
+	}, 2000);
 }
 
 async function SelectPort() {
@@ -227,17 +240,30 @@ async function SelectPort() {
 		portListPrompt.items = lista.map(
 			element => ({ label: element.path })
 		);
-		if (lista.length == 0) {
+		portPrompt.show();
+		/* if (lista.length == 0) {
 			portPrompt.show();
 		} else {
 			portListPrompt.show();
-		}
+		} */
 	});
 }
 
 async function ObtenerArchivo(archivo: Archivo) {
 	let path = archivo.path;
 	//FileContent evento donde se obtiene el archivo
+	if (!isConnected()) return;
+
+	globalDevice.openPort();
+	globalDevice.once("FileContent", FileContentHandler);
+	globalDevice.getFile(path);
+}
+
+function FileContentHandler(archi: { path: string, contenido: string }) {
+	let filename = join(workFolder, archi.path);
+
+	fs.writeFileSync(filename, archi.contenido);
+	globalDevice.closePort();
 }
 
 

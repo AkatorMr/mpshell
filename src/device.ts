@@ -1,9 +1,9 @@
 
-import EventEmitter from "stream";
+import { EventEmitter } from "stream";
 import { ByteLengthParser, InterByteTimeoutParser, RegexParser, SerialPort } from "serialport";
-import path from 'path';
+import * as path from 'path';
 
-import fs from 'fs'
+import * as fs from 'fs'
 
 enum WaitFor {
     LIST_FILES,
@@ -77,20 +77,33 @@ export class Dispositivo extends EventEmitter {
         this.lstEvent.on("OnOnlyRaw", this.onOnlyRaw);
 
         this.onReadyQueqe = new Array<Function>();
-
-        this.port.open();
-
-        setTimeout(() => {
-            this.port.close();
-        }, 3000);
+        /* 
+                this.port.open();
+        
+                setTimeout(() => {
+                    this.port.close();
+                }, 3000); */
     }
 
+
+    public openPort() {
+        this.port.open();
+    }
+
+    public closePort() {
+        this.port.close();
+    }
     /** Listeners */
 
     /** */
     private onOnlyRaw(arg0: Buffer) {
-        //console.log("OnlyRaw", arg0.toString());
+        console.log("OnlyRaw", arg0.toString());
         const str = arg0.toString();
+        if (str.includes("[")) {
+            console.log("Es list");
+            this.waitingFor(str);
+            return;
+        }
         let hex = str.split(/(?=(?:..)*$)/);
 
         let result = "";
@@ -351,7 +364,7 @@ export class Dispositivo extends EventEmitter {
             //formato: ['foo.barr','bar.py']
             const content = data;
 
-            this.emit("FileContent", content);
+            this.emit("FileContent", { path: fileName, contenido: content });
 
         };
 
@@ -406,10 +419,10 @@ export class Dispositivo extends EventEmitter {
 
         this.waitingFor = (data: string) => {
             //formato: ['foo.barr','bar.py']
-            data = data.substring(1, data.length - 2);
-            data = data.replace("'", "");
+            /* data = data.substring(1, data.length - 2);
+            data = data.replace("'", ""); */
             let list: string[] = data.split(",");
-
+            console.log("waitFor", list);
             this.emit("UpdateListFiles", list);
 
         };
