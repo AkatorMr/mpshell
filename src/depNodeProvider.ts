@@ -18,7 +18,7 @@ export class DepNodeProvider implements vscode.TreeDataProvider<Archivo> {
   public updateList(data: string[]) {
     this._list = [];
     data.forEach(element => {
-      this._list.push(element);
+      this._list.push(element.trim());
     });
 
     this.refresh();

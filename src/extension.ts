@@ -38,6 +38,8 @@ function errorPort(error: Error | null) {
 	if (error == null) {
 		globalReady = true;
 		globalDevice = new Dispositivo(globalPort);
+		globalDevice.on("UpdateListFiles", ListFilesHandler);
+		globalDevice.on("FileContent", FileContentHandler);
 		return
 	};
 	globalReady = false;
@@ -202,7 +204,7 @@ async function ListFiles() {
 	if (!isConnected()) return;
 	globalDevice.openPort();
 	globalDevice.listFiles()
-	globalDevice.once("UpdateListFiles", ListFilesHandler)
+
 	//UpdateListFiles evento
 	//ListFilesHandler(["uno", "dos", "tres"]);
 }
@@ -255,7 +257,6 @@ async function ObtenerArchivo(archivo: Archivo) {
 	if (!isConnected()) return;
 
 	globalDevice.openPort();
-	globalDevice.once("FileContent", FileContentHandler);
 	globalDevice.getFile(path);
 }
 

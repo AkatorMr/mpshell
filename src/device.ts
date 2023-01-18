@@ -46,6 +46,9 @@ export class Dispositivo extends EventEmitter {
     private waitingFor: Function = (data: string) => { };
     private flagUno: boolean = false;
 
+    private bufferCompleto: Buffer = Buffer.alloc(512);
+    private offset: number = 0;
+
     constructor(_port: SerialPort) {
         super();
         this.port = _port;
@@ -97,11 +100,19 @@ export class Dispositivo extends EventEmitter {
 
     /** */
     private onOnlyRaw(arg0: Buffer) {
+        console.log("this.offset", this.offset);
+        this.offset = 0;
         console.log("OnlyRaw", arg0.toString());
         const str = arg0.toString();
         if (str.includes("[")) {
-            console.log("Es list");
-            this.waitingFor(str);
+            //console.log("Es list");
+            let sinNada = str.replace(/(\[|'|\])+/g, "");
+            /* 
+                        sinNada = sinNada.replace("'", "");
+                        sinNada = sinNada.replace("[", "");
+                        sinNada = sinNada.replace("]", ""); */
+            console.log("sinNada", sinNada);
+            this.waitingFor(sinNada);
             return;
         }
         let hex = str.split(/(?=(?:..)*$)/);
@@ -185,15 +196,28 @@ export class Dispositivo extends EventEmitter {
 
 
         if (uno || this.flagUno) {
+            if (uno) {
+                data = data.subarray(2);
+            }
             this.flagUno = true;
             let firstIndex = data.indexOf(Buffer.from([0x04, 0x04, 0x3e]));
             if (firstIndex > 0) {
                 this.flagUno = false;
-                const newData = data.subarray(2, firstIndex);
+                const newData = data.subarray(0, firstIndex);
 
-                this.lstEvent.emit("OnOnlyRaw", newData);
+                this.bufferCompleto.write(newData.toString(), this.offset);
+                this.offset += newData.length;
+
+
+                this.lstEvent.emit(
+                    "OnOnlyRaw",
+                    this.bufferCompleto.subarray(0, this.offset)
+                );
+
             } else {
-                this.lstEvent.emit("OnOnlyRaw", data);
+                //this.lstEvent.emit("OnOnlyRaw", data);
+                this.bufferCompleto.write(data.toString(), this.offset);
+                this.offset += data.length;
             }
         }
         //console.log(data.toString());
@@ -290,7 +314,7 @@ export class Dispositivo extends EventEmitter {
         line.forEach(element => {
             this.onReadyRaw.push(
                 () => {
-                    let datos = "f.write(ubinascii.unhexlify('" + this.hexlify(element) + "'))";
+                    let datos = "f.write(ubinascii.unhexlify('" + this.hexlify(element + "\n") + "'))";
                     console.log(datos);
                     this.port.write(datos);
                     this.port.write([13]);
