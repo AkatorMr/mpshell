@@ -94,6 +94,9 @@ export class Dispositivo extends EventEmitter {
     }
 
     public closePort() {
+        this.flagUno = false;
+        this.bufferCompleto.fill('\0');
+        this.offset = 0;
         this.port.close();
     }
     /** Listeners */
@@ -104,6 +107,7 @@ export class Dispositivo extends EventEmitter {
         this.offset = 0;
         console.log("OnlyRaw", arg0.toString());
         const str = arg0.toString();
+
         if (str.includes("[")) {
             //console.log("Es list");
             let sinNada = str.replace(/(\[|'|\])+/g, "");
@@ -348,6 +352,59 @@ export class Dispositivo extends EventEmitter {
         this.port.write([3]);   //Ctrl+C
         this.port.write([3]);//Ctrl+C
         this.EnterRawMode();
+    }
+
+    public deleteFile(fileName: string) {
+
+        this.onReadyRaw.push(
+            () => {
+
+                this.port.write("import os");
+                this.port.write([13]);
+            }
+        );
+        this.onReadyRaw.push(
+            () => {
+
+                this.port.write("os.remove('" + fileName + "')");
+                this.port.write([13]);
+            }
+        );
+
+
+        this.onReadyRaw.push(
+            () => {
+                let thePort = this.port;
+                console.log("Send: Ctrl+D");
+                //this.port.write([127, 13]);
+                this.port.write([0x04]);//Ctrl+D
+                this.ExitRawMode();
+
+                this.port.write([13]);
+            }
+        );
+
+        this.waitingFor = (data: string) => {
+            //formato: ['foo.barr','bar.py']
+            const content = data;
+
+            this.emit("FilesChanges");
+
+        };
+
+
+        this.port.write('\r');//Enter
+        this.port.write([3]);   //Ctrl+C
+        this.port.write([3]);//Ctrl+C
+        this.EnterRawMode();
+    }
+
+    public softReset() {
+        this.port.write('\r');//Enter
+        this.port.write([3]);   //Ctrl+C
+        this.port.write([3]);//Ctrl+C
+        this.port.write("machine.soft_reset()\n");
+
     }
 
     /**getFile(fileName) 

@@ -1,4 +1,5 @@
 import os
+import sys
 import ubinascii
 
 def listdir(directory):
@@ -21,5 +22,11 @@ def listdir(directory):
                 result.add(dir_or_file)                     
     _listdir(directory)
     return sorted(result)
-
-print(listdir('/'))
+#print(listdir('/'))
+fileListCompleta=''
+for fileName in listdir('/'):
+    if fileListCompleta=='':
+        fileListCompleta=fileName
+    else:
+        fileListCompleta=fileListCompleta+','+fileName
+sys.stdout.write(ubinascii.hexlify(fileListCompleta))

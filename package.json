@@ -30,8 +30,16 @@
         "title": "Obtener"
       },
       {
+        "command": "fileList.eliminar",
+        "title": "Eliminar"
+      },
+      {
         "command": "mpshell.selectport",
         "title": "Select Port"
+      },
+      {
+        "command": "mpshell.soft_reset",
+        "title": "Soft Reset"
       },
       {
         "command": "mpshell.syncdata",
@@ -50,6 +58,11 @@
       "view/item/context": [
         {
           "command": "fileList.obtener",
+          "group": "inline",
+          "when": "view == fileList && viewItem == archivo"
+        },
+        {
+          "command": "fileList.eliminar",
           "group": "inline",
           "when": "view == fileList && viewItem == archivo"
         }

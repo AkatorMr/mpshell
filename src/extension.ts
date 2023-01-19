@@ -17,6 +17,7 @@ const CHANGE_SETTING_ID = "mpshell.changesetting";
 const SELECT_PORT_ID = "mpshell.selectport";
 const SEND_CURRENT_FILE_ID = "mpshell.sendcurrentfile";
 const LIST_FILES_ID = "mpshell.listfiles";
+const SOFT_RESET_ID = "mpshell.soft_reset";
 
 
 
@@ -40,6 +41,7 @@ function errorPort(error: Error | null) {
 		globalDevice = new Dispositivo(globalPort);
 		globalDevice.on("UpdateListFiles", ListFilesHandler);
 		globalDevice.on("FileContent", FileContentHandler);
+		globalDevice.on("FilesChanges", FilesChangeHandler);
 		return
 	};
 	globalReady = false;
@@ -227,7 +229,8 @@ async function SendcurrentFile() {
 
 	const contenido = fs.readFileSync(current_doc, 'ascii');
 	let fileName = current_doc.substring(workFolder.length + 1);
-	fileName.replace("\\", "/");
+	fileName = fileName.replace(/\\/g, "/");
+	console.log(fileName);
 	//Subir current file
 	globalDevice.openPort();
 	globalDevice.sendFile(fileName, contenido);
@@ -242,12 +245,12 @@ async function SelectPort() {
 		portListPrompt.items = lista.map(
 			element => ({ label: element.path })
 		);
-		portPrompt.show();
-		/* if (lista.length == 0) {
+		//portPrompt.show();
+		if (lista.length == 0) {
 			portPrompt.show();
 		} else {
 			portListPrompt.show();
-		} */
+		}
 	});
 }
 
@@ -259,12 +262,25 @@ async function ObtenerArchivo(archivo: Archivo) {
 	globalDevice.openPort();
 	globalDevice.getFile(path);
 }
+async function EliminarArchivo(archivo: Archivo) {
+	let path = archivo.path;
+	//FileContent evento donde se obtiene el archivo
+	if (!isConnected()) return;
+
+	globalDevice.openPort();
+	globalDevice.deleteFile(path);
+}
 
 function FileContentHandler(archi: { path: string, contenido: string }) {
 	let filename = join(workFolder, archi.path);
 
 	fs.writeFileSync(filename, archi.contenido);
 	globalDevice.closePort();
+}
+function FilesChangeHandler() {
+
+	globalDevice.closePort();
+	ListFiles();
 }
 
 
@@ -337,10 +353,23 @@ export function activate(context: vscode.ExtensionContext) {
 		"fileList.obtener",
 		ObtenerArchivo
 	);
+	let eliminarCommand = vscode.commands.registerCommand(
+		"fileList.eliminar",
+		EliminarArchivo
+	);
+	let softReset = vscode.commands.registerCommand(
+		SOFT_RESET_ID,
+		() => {
+			globalDevice.openPort();
+			globalDevice.softReset();
+		}
+	);
 
 	context.subscriptions.push(send_current_file);
+	context.subscriptions.push(softReset);
 	context.subscriptions.push(changesettin);
 	context.subscriptions.push(obtenercommand);
+	context.subscriptions.push(eliminarCommand);
 	context.subscriptions.push(disposable);
 	context.subscriptions.push(select_port);
 	context.subscriptions.push(list_files);
