@@ -1,71 +1,47 @@
-# mpshell README
+# mpshell
 
-This is the README for your extension "mpshell". After writing up a brief description, we recommend including the following sections.
+mpShell es una herramienta para interactuar con MicroPython a través de una conexión serial.
 
-## Features
+mpShell te permite manipular los archivos de las placas con MicroPython a través de una conexión serial. mpShell envía los archivos desde tu computadora al sistema de archivos de la placa.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+mpShell está diseñado para operar con accesos gráficos proporcionados por vscode.
 
-For example if there is an image subfolder under your extension project workspace:
+Revisa otras herramientas realizadas en python como [rshell](https://github.com/dhylands/rshell)
+, [mpfshell](https://github.com/wendlers/mpfshell) or [ampy](https://github.com/scientifichackers/ampy) para otro tipo de interacción.
 
-\!\[feature X\]\(images/feature-x.png\)
+## Instalación
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Busca la extensión mpShell en el administración de extensiones de vscode.
 
-## Requirements
+## Uso
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+La extensión incorpora nuevos comandos para interactuar con la placa con MicroPyton
 
-## Extension Settings
+### Obtener
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+Obtiene el archivo contenido en la placa y lo guarda en el directorio de trabajo.
 
-For example:
 
-This extension contributes the following settings:
+### Eliminar
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+Elimina el archivo seleccionado solo en la placa.
 
-## Known Issues
+### Select Port
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+Lista los puertos disponibles para conexión y luego seleccionarlo
 
-## Release Notes
+### Soft Reset
 
-Users appreciate release notes as you update your extension.
+Ejecuta un soft reset de la placa
 
-### 1.0.0
+### Sync Files
 
-Initial release of ...
+ToDo - Sincroniza los archivo de la carpeta de trabajo con los archivos de la placa.
 
-### 1.0.1
+### Modificar configuración
 
-Fixed issue #.
+Modifica la configuración de la conexión sin ateneder a los datos previamente cargados
 
-### 1.1.0
+### Send current file
 
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Envía el archivo .py abierto en el editor a la placa.

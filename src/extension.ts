@@ -35,8 +35,37 @@ let globalReady: boolean = false;
 let globalPort: SerialPort;
 let globalDevice: Dispositivo;
 
+
+function writeConfigFile() {
+
+	let folder = join(workFolder, ".vscode");
+	if (fs.existsSync(folder)) {
+		let fileSetting = join(folder, "mpshell.json");
+
+		fs.writeFileSync(fileSetting, "{\"baudrate\":\"" + baudrateString + "\", \"port\":\"" + portString + "\"}");
+
+		const setting = fs.readFileSync(fileSetting).toString();
+
+		const json = JSON.parse(setting);
+
+		baudrateString = json.baudrate;
+		portString = json.port;
+		testConnection();
+		setPlaceHolder();
+
+
+
+	} else {
+		//Crear directorio
+		//console.log("Crear directorio");
+		fs.mkdirSync(folder);
+	}
+}
+
 function errorPort(error: Error | null) {
 	if (error == null) {
+
+		writeConfigFile();
 		globalReady = true;
 		globalDevice = new Dispositivo(globalPort);
 		globalDevice.on("UpdateListFiles", ListFilesHandler);
@@ -62,6 +91,7 @@ function setPlaceHolder() {
 
 }
 function testConnection() {
+	console.log("testConnectoion", portString, baudrateString);
 	if (portString.length == 0) {
 		portPrompt.show();
 		return;
@@ -112,7 +142,7 @@ function prepareUI() {
 
 	portPrompt.onDidAccept((e: void) => {
 		portString = portPrompt.value;
-		console.log(portPrompt.value);
+		console.log("PortString", portPrompt.value);
 		portPrompt.dispose();
 		if (baudrateString.length == 0) {
 			bratePrompt.show();
@@ -127,6 +157,7 @@ function prepareUI() {
 	bratePrompt.onDidAccept((e: void) => {
 
 		baudrateString = bratePrompt.value;
+		console.log("baudrateString", baudrateString);
 		bratePrompt.dispose();
 
 		testConnection();
@@ -170,6 +201,7 @@ function checkConfigFile(workFolder: string) {
 		let fileSetting = join(folder, "mpshell.json");
 		if (fs.existsSync(fileSetting)) {
 			const setting = fs.readFileSync(fileSetting).toString();
+
 			const json = JSON.parse(setting);
 
 			baudrateString = json.baudrate;
@@ -179,11 +211,13 @@ function checkConfigFile(workFolder: string) {
 
 			console.log(baudrateString, portString);
 		} else {
-			console.log("Crear archvo")
+			//fs.writeFileSync(fileSetting, "{}");
+
 		}
 	} else {
 		//Crear directorio
-		console.log("Crear directorio");
+		//console.log("Crear directorio");
+		fs.mkdirSync(folder);
 	}
 }
 
@@ -245,12 +279,12 @@ async function SelectPort() {
 		portListPrompt.items = lista.map(
 			element => ({ label: element.path })
 		);
-		//portPrompt.show();
-		if (lista.length == 0) {
+		portPrompt.show();
+		/* if (lista.length == 0) {
 			portPrompt.show();
 		} else {
 			portListPrompt.show();
-		}
+		} */
 	});
 }
 
