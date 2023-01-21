@@ -50,7 +50,7 @@ function writeConfigFile() {
 
 		baudrateString = json.baudrate;
 		portString = json.port;
-		testConnection();
+
 		setPlaceHolder();
 
 
@@ -91,7 +91,7 @@ function setPlaceHolder() {
 
 }
 function testConnection() {
-	console.log("testConnectoion", portString, baudrateString);
+	console.log("testConnectoion", ".." + portString + "..", baudrateString);
 	if (portString.length == 0) {
 		portPrompt.show();
 		return;
@@ -101,6 +101,9 @@ function testConnection() {
 		bratePrompt.show();
 		return;
 	}
+
+	if (globalPort != null)
+		globalPort.close();
 
 	globalPort = new SerialPort({
 		path: portString,

@@ -2,7 +2,8 @@
   "name": "mpshell",
   "displayName": "mpShell",
   "description": "Python REPL shell",
-  "version": "0.0.1",
+  "icon": "icon.jpg",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.65.0"
   },
@@ -40,19 +41,19 @@
       },
       {
         "command": "mpshell.selectport",
-        "title": "Select Port"
+        "title": "mpShell: Select Port"
       },
       {
         "command": "mpshell.soft_reset",
-        "title": "Soft Reset"
+        "title": "mpShell: Soft Reset"
       },
       {
         "command": "mpshell.syncdata",
-        "title": "Sync Files"
+        "title": "mpShell: Sync Files"
       },
       {
         "command": "mpshell.changesetting",
-        "title": "Modificar configuración"
+        "title": "mpShell: Modificar configuración"
       },
       {
         "command": "mpshell.sendcurrentfile",
