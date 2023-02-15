@@ -49,6 +49,8 @@ export class Dispositivo extends EventEmitter {
     private bufferCompleto: Buffer = Buffer.alloc(512);
     private offset: number = 0;
 
+    private filePart: [{ nombre: string, part: number, contenido: string }];
+
     constructor(_port: SerialPort) {
         super();
         this.port = _port;
@@ -117,6 +119,30 @@ export class Dispositivo extends EventEmitter {
                         sinNada = sinNada.replace("]", ""); */
             console.log("sinNada", sinNada);
             this.waitingFor(sinNada);
+            return;
+        }
+        if (str.includes("M")) {
+
+            let nombrePart = str.split("N")[0];
+            let nombre = nombrePart.split(',')[0];
+            let part = nombrePart.split(',')[1];
+
+            let cotent = str.split("N")[1];
+            cotent = cotent.split("P")[0];
+
+            let result = "";
+            let hex = cotent.split(/(?=(?:..)*$)/);
+            hex.forEach(element => {
+                result += String.fromCharCode(parseInt("0x" + element));
+            });
+
+            this.filePart.push({
+                nombre: nombre,
+                part: parseInt(part),
+                contenido: result
+            });
+
+
             return;
         }
         let hex = str.split(/(?=(?:..)*$)/);
@@ -205,6 +231,7 @@ export class Dispositivo extends EventEmitter {
             }
             this.flagUno = true;
             let firstIndex = data.indexOf(Buffer.from([0x04, 0x04, 0x3e]));
+            //console.log("FirstIndex", firstIndex);
             if (firstIndex > 0) {
                 this.flagUno = false;
                 const newData = data.subarray(0, firstIndex);
@@ -222,7 +249,11 @@ export class Dispositivo extends EventEmitter {
                 //this.lstEvent.emit("OnOnlyRaw", data);
                 this.bufferCompleto.write(data.toString(), this.offset);
                 this.offset += data.length;
+
+
             }
+
+
         }
         //console.log(data.toString());
         //self.port.pause();
@@ -302,7 +333,7 @@ export class Dispositivo extends EventEmitter {
     public sendFile(path: string, contenido: string) {
 
         let line: string[] = contenido.split("\n");
-
+        console.log("Antes de enviar");
         this.onReadyRaw.push(
             () => {
                 this.port.write("import os");
@@ -324,6 +355,14 @@ export class Dispositivo extends EventEmitter {
                     this.port.write([13]);
                 }
             );
+            //Cada 30 lineas enviamos un Ctrl+D para ejecutar esa parte
+            if (this.onReadyRaw.length % 30 == 0)
+                this.onReadyRaw.push(
+                    () => {
+                        this.port.write([0x04]);//Ctrl+D
+                    }
+                );
+
         });
 
 
@@ -352,6 +391,7 @@ export class Dispositivo extends EventEmitter {
         this.port.write([3]);   //Ctrl+C
         this.port.write([3]);//Ctrl+C
         this.EnterRawMode();
+        console.log("Enviando");
     }
 
     public deleteFile(fileName: string) {
@@ -416,7 +456,8 @@ export class Dispositivo extends EventEmitter {
 
         const toSend: string = text;
 
-        let line: string[] = toSend.replace("{0}", fileName).replace("{1}", "32").split("\n");
+        let part = "0";
+        let line: string[] = toSend.replace("{0}", fileName).replace("{2}", part).replace("{1}", "256").split("\n");
 
         line.forEach(element => {
             this.onReadyRaw.push(
@@ -495,6 +536,7 @@ export class Dispositivo extends EventEmitter {
                 this.ExitRawMode();
 
                 this.port.write([13]);
+
             }
         );
 

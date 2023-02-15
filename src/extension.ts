@@ -71,7 +71,10 @@ function errorPort(error: Error | null) {
 		globalDevice.on("UpdateListFiles", ListFilesHandler);
 		globalDevice.on("FileContent", FileContentHandler);
 		globalDevice.on("FilesChanges", FilesChangeHandler);
-		return
+
+		vscode.window.showInformationMessage('Puerto disponible');
+
+		return;
 	};
 	globalReady = false;
 	vscode.window.showInformationMessage('El puerto ingresado no sirve o está ocupado');
@@ -92,6 +95,12 @@ function setPlaceHolder() {
 }
 function testConnection() {
 	console.log("testConnectoion", ".." + portString + "..", baudrateString);
+
+	if (portPrompt != undefined)
+		portPrompt.dispose();
+	if (bratePrompt != undefined)
+		bratePrompt.dispose();
+
 	if (portString.length == 0) {
 		portPrompt.show();
 		return;
@@ -271,9 +280,9 @@ async function SendcurrentFile() {
 	//Subir current file
 	globalDevice.openPort();
 	globalDevice.sendFile(fileName, contenido);
-	setTimeout(() => {
+	/* setTimeout(() => {
 		globalDevice.closePort();
-	}, 2000);
+	}, 2000); */
 }
 
 async function SelectPort() {
