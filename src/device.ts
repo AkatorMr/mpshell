@@ -1,38 +1,14 @@
 
 import { EventEmitter } from "stream";
-import { ByteLengthParser, InterByteTimeoutParser, RegexParser, SerialPort } from "serialport";
+import { InterByteTimeoutParser, SerialPort } from "serialport";
 import * as path from 'path';
 
 import * as fs from 'fs'
-
-enum WaitFor {
-    LIST_FILES,
-    FILE_CONTENT,
-    WRITE_END
-}
-
-class Mix {
-    private waitFor: WaitFor;
-    private cb: Function;
-
-    constructor(waitFor: WaitFor, cb: Function) {
-        this.waitFor = waitFor;
-        this.cb = cb;
-    }
-
-    public execute(args: any) {
-        this.cb(args);
-    }
-    public isIt(waitFor: WaitFor): boolean {
-        return this.waitFor == waitFor;
-    }
-}
 
 
 export class Dispositivo extends EventEmitter {
 
     private port: SerialPort;
-    private buffer: Array<number> = [];
     private last: number = 0;
     private readyToReceive = false;
     private lstEvent = new EventEmitter();
@@ -46,16 +22,17 @@ export class Dispositivo extends EventEmitter {
     private waitingFor: Function = (data: string) => { };
     private flagUno: boolean = false;
 
-    private bufferCompleto: Buffer = Buffer.alloc(512);
+    private bufferCompleto: Buffer = Buffer.alloc(100 * 1024);
     private offset: number = 0;
 
-    private filePart: [{ nombre: string, part: number, contenido: string }];
 
     constructor(_port: SerialPort) {
         super();
         this.port = _port;
 
         //let parse = this.port.pipe(new ByteLengthParser({ length: 1 }));
+
+        //Cada 30 ms enviar los datos a precesar
         let parse = this.port.pipe(
             new InterByteTimeoutParser({ interval: 30 })
         );
@@ -70,16 +47,17 @@ export class Dispositivo extends EventEmitter {
         this.onReady = this.onReady.bind(this);
         this.onRaw = this.onRaw.bind(this);
         this.OnExitRaw = this.OnExitRaw.bind(this);
-        this.checkEnd = this.checkEnd.bind(this);
         this.onOnlyRaw = this.onOnlyRaw.bind(this);
+        this.FinDeCadena = this.FinDeCadena.bind(this);
 
         parse.on("data", this.onData)
-        //onlyRaw.on("data", this.onOnlyRaw);
+
 
         this.lstEvent.on("onReady", this.onReady);
         this.lstEvent.on("onRaw", this.onRaw);
         this.lstEvent.on("OnExitRaw", this.OnExitRaw);
         this.lstEvent.on("OnOnlyRaw", this.onOnlyRaw);
+        this.lstEvent.on("FinDeCadena", this.FinDeCadena);
 
         this.onReadyQueqe = new Array<Function>();
         /* 
@@ -90,6 +68,9 @@ export class Dispositivo extends EventEmitter {
                 }, 3000); */
     }
 
+    private FinDeCadena() {
+        this.port.write([0x0a]);
+    }
 
     public openPort() {
         this.port.open();
@@ -104,53 +85,43 @@ export class Dispositivo extends EventEmitter {
     /** Listeners */
 
     /** */
-    private onOnlyRaw(arg0: Buffer) {
+    private onOnlyRaw(arg1: Buffer) {
         console.log("this.offset", this.offset);
+        //
+        //console.log("OnlyRaw", arg0.toString());
+
+        let arg0 = Buffer.alloc(this.offset);
         this.offset = 0;
-        console.log("OnlyRaw", arg0.toString());
-        const str = arg0.toString();
 
-        if (str.includes("[")) {
-            //console.log("Es list");
-            let sinNada = str.replace(/(\[|'|\])+/g, "");
-            /* 
-                        sinNada = sinNada.replace("'", "");
-                        sinNada = sinNada.replace("[", "");
-                        sinNada = sinNada.replace("]", ""); */
-            console.log("sinNada", sinNada);
-            this.waitingFor(sinNada);
-            return;
+        let localOffset = 0;
+        for (let i = 0; i < arg1.length; i++) {
+            let b = arg1.readInt8(i);
+            if (b != 64) {
+                arg0.writeUInt8(b, localOffset);
+                localOffset++;
+            }
         }
-        if (str.includes("M")) {
+        console.log(localOffset);
 
-            let nombrePart = str.split("N")[0];
-            let nombre = nombrePart.split(',')[0];
-            let part = nombrePart.split(',')[1];
+        let arg3 = Buffer.alloc(localOffset);
+        arg0.copy(arg3, 0, 0, localOffset);
 
-            let cotent = str.split("N")[1];
-            cotent = cotent.split("P")[0];
+        const str = arg3.toString();
 
-            let result = "";
-            let hex = cotent.split(/(?=(?:..)*$)/);
-            hex.forEach(element => {
-                result += String.fromCharCode(parseInt("0x" + element));
-            });
+        //console.log(str);
 
-            this.filePart.push({
-                nombre: nombre,
-                part: parseInt(part),
-                contenido: result
-            });
-
-
-            return;
-        }
         let hex = str.split(/(?=(?:..)*$)/);
 
         let result = "";
-        hex.forEach(element => {
-            result += String.fromCharCode(parseInt("0x" + element));
-        });
+        if (localOffset % 2 == 0)
+            hex.forEach(element => {
+                result += String.fromCharCode(parseInt("0x" + element));
+                //console.log(element);
+                return;
+            });
+
+        //console.log(result);
+
         this.waitingFor(result);
 
     }
@@ -188,17 +159,17 @@ export class Dispositivo extends EventEmitter {
     private onData(data: Buffer) {
 
         //console.log(data);
-        this.readyToReceive = this.checkEnd(
+        this.readyToReceive = checkEnd(
             data,
             Buffer.from([62, 62, 62, 32])
         );
         //console.log(data);
-        this.readyRaw = this.checkEnd(
+        this.readyRaw = checkEnd(
             data,
             Buffer.from("raw REPL; CTRL-B to exit\r\n>")
         );
 
-        this.readyExitRaw = this.checkEnd(
+        this.readyExitRaw = checkEnd(
             data,
             Buffer.from([0x3e, 0x4f, 0x4b, 0x04, 0x04, 0x3e])
         );
@@ -219,9 +190,13 @@ export class Dispositivo extends EventEmitter {
         }
 
         //console.log("Data ", data.toString());
-        let uno = this.checkStart(
+        let uno = checkStart(
             data,
             Buffer.from("OK")
+        );
+        uno = uno || checkStart(
+            data,
+            Buffer.from("M")
         );
 
 
@@ -231,8 +206,8 @@ export class Dispositivo extends EventEmitter {
             }
             this.flagUno = true;
             let firstIndex = data.indexOf(Buffer.from([0x04, 0x04, 0x3e]));
-            //console.log("FirstIndex", firstIndex);
-            if (firstIndex > 0) {
+            console.log("FirstIndex", firstIndex);
+            if (firstIndex > -1) {
                 this.flagUno = false;
                 const newData = data.subarray(0, firstIndex);
 
@@ -246,13 +221,16 @@ export class Dispositivo extends EventEmitter {
                 );
 
             } else {
-                //this.lstEvent.emit("OnOnlyRaw", data);
+
                 this.bufferCompleto.write(data.toString(), this.offset);
                 this.offset += data.length;
 
 
             }
 
+            if (Contiene(data, "@@@")) {
+                this.lstEvent.emit("FinDeCadena");
+            }
 
         }
         //console.log(data.toString());
@@ -261,49 +239,7 @@ export class Dispositivo extends EventEmitter {
 
     }
 
-    public sendTest() {
 
-
-        this.onReadyQueqe.push(
-            () => {
-                this.port.write("import machine");
-                this.port.write([13]);
-            }
-        );
-
-
-
-        this.onReadyQueqe.push(
-            () => {
-                this.port.write("led = machine.Pin(25,machine.Pin.OUT)");
-                this.port.write([13]);
-            }
-        );
-
-        this.onReadyQueqe.push(
-            () => {
-                this.port.write("led.toggle()");
-                this.port.write([13]);
-            }
-        );
-        this.onReadyQueqe.push(
-            () => {
-                this.port.write("led.toggle()");
-                this.port.write([13]);
-            }
-        );
-        this.onReadyQueqe.push(
-            () => {
-                this.port.write("led.toggle()");
-                this.port.write([13]);
-            }
-        );
-        //console.log(this.onReadyQueqe.length);
-        this.port.write('\r');
-        this.port.write([3]);
-        this.port.write([3]);
-
-    }
 
 
     private hexlify(data: string): string {
@@ -337,11 +273,11 @@ export class Dispositivo extends EventEmitter {
         this.onReadyRaw.push(
             () => {
                 this.port.write("import os");
-                this.port.write([13]);
+                this.Enter();
                 this.port.write("import ubinascii");
-                this.port.write([13]);
+                this.Enter();
                 this.port.write("f = open('{0}','wb')".replace("{0}", path))
-                this.port.write([13]);
+                this.Enter();
 
             }
         );
@@ -352,14 +288,14 @@ export class Dispositivo extends EventEmitter {
                     let datos = "f.write(ubinascii.unhexlify('" + this.hexlify(element + "\n") + "'))";
                     console.log(datos);
                     this.port.write(datos);
-                    this.port.write([13]);
+                    this.Enter();
                 }
             );
             //Cada 30 lineas enviamos un Ctrl+D para ejecutar esa parte
             if (this.onReadyRaw.length % 30 == 0)
                 this.onReadyRaw.push(
                     () => {
-                        this.port.write([0x04]);//Ctrl+D
+                        this.CtrlD();
                     }
                 );
 
@@ -368,28 +304,21 @@ export class Dispositivo extends EventEmitter {
 
         this.onReadyRaw.push(
             () => {
-                let thePort = this.port;
+
                 console.log("Send: Ctrl+D");
                 this.port.write("f.close()");
-                this.port.write([0x04]);//Ctrl+D
+                this.CtrlD();
                 this.ExitRawMode();
 
-                this.port.write([13]);
+                this.Enter();
             }
         );
 
-        /*  this.waitingFor = (data: string) => {
-             //formato: ['foo.barr','bar.py']
-             const content = data;
- 
-             this.emit("FileContent", content);
- 
-         };
-  */
 
-        this.port.write('\r');//Enter
-        this.port.write([3]);   //Ctrl+C
-        this.port.write([3]);//Ctrl+C
+
+        this.Enter();
+        this.CtrlC();
+        this.CtrlC();
         this.EnterRawMode();
         console.log("Enviando");
     }
@@ -439,36 +368,19 @@ export class Dispositivo extends EventEmitter {
         this.EnterRawMode();
     }
 
-    public softReset() {
-        this.port.write('\r');//Enter
-        this.port.write([3]);   //Ctrl+C
-        this.port.write([3]);//Ctrl+C
-        this.port.write("machine.soft_reset()\n");
+    public getFileSize(fileName: string) {
 
-    }
+        this.onReadyRaw.push(
+            () => {
 
-    /**getFile(fileName) 
-     * @param fileName Path del fichero que se quiere obtener
-     */
-    public getFile(fileName: string) {
-        //const toSend: string = require("./command/get.file.py");
-        const text = fs.readFileSync(path.join(__dirname, './command/get.file.py'), 'utf-8');
-
-        const toSend: string = text;
-
-        let part = "0";
-        let line: string[] = toSend.replace("{0}", fileName).replace("{2}", part).replace("{1}", "256").split("\n");
-
-        line.forEach(element => {
-            this.onReadyRaw.push(
-                () => {
-                    let thePort = this.port;
-                    console.log("Send: ", element);
-                    this.port.write(element);
-                    this.port.write([13]);
-                }
-            );
-        });
+                this.port.write("import os");
+                this.port.write([13]);
+                this.port.write("import ubinascii");
+                this.port.write([13]);
+                this.port.write("sys.stdout.write(ubinascii.hexlify(''+os.stat('" + fileName + "')[6]))");
+                this.port.write([13]);
+            }
+        );
 
         this.onReadyRaw.push(
             () => {
@@ -486,7 +398,7 @@ export class Dispositivo extends EventEmitter {
             //formato: ['foo.barr','bar.py']
             const content = data;
 
-            this.emit("FileContent", { path: fileName, contenido: content });
+            this.emit("FilesChanges");
 
         };
 
@@ -494,6 +406,156 @@ export class Dispositivo extends EventEmitter {
         this.port.write('\r');//Enter
         this.port.write([3]);   //Ctrl+C
         this.port.write([3]);//Ctrl+C
+        this.EnterRawMode();
+    }
+
+    public softReset() {
+        this.Enter();
+        this.CtrlC();
+        this.CtrlC();
+        this.port.write("machine.soft_reset()\n");
+
+    }
+
+    /**getFile(fileName) 
+     * @param fileName Path del fichero que se quiere obtener
+     */
+    public getFile(fileName: string) {
+        //const toSend: string = require("./command/get.file.py");
+        const text = fs.readFileSync(path.join(__dirname, './command/get.file.py'), 'utf-8');
+
+        const toSend: string = text;
+
+        let part = "0";
+        let line: string[] = toSend.replace("{0}", fileName).replace("{2}", part).replace("{1}", "256").split("\n");
+
+        line.push("get_file2('" + fileName + "')");
+
+        line.forEach(element => {
+            this.onReadyRaw.push(
+                () => {
+
+                    console.log("Send: ", element);
+                    this.port.write(element);
+                    this.Enter();
+                }
+            );
+        });
+
+        this.onReadyRaw.push(
+            () => {
+                this.CtrlD();
+                this.ExitRawMode();
+
+                this.Enter();
+            }
+        );
+
+        this.waitingFor = (data: string) => {
+            //formato: ['foo.barr','bar.py']
+            const content = data;
+
+            this.emit("FileContent", { path: fileName, contenido: content });
+
+        };
+
+
+        this.Enter();
+        this.CtrlC();
+        this.CtrlC();
+        this.EnterRawMode();
+    }
+
+    /**getFilePart(fileName,part) 
+     * @param fileName Path del fichero que se quiere obtener
+     * @param part numero que indica la parte
+     */
+    public getFilePart(fileName: string, part: number) {
+
+        let line: string = ""
+        console.log("Part", part);
+
+        line = "get_file_n('" + fileName + "'," + part + ")";
+
+        let thePort = this.port;
+        console.log("Send: ", line);
+        this.port.write(line);
+
+        this.Enter();
+        this.Enter();
+        this.CtrlD();
+        //this.port.write([127, 13]);
+
+
+
+    }
+
+    public getFileNew(fileName: string) {
+        //const toSend: string = require("./command/get.file.py");
+        const text = fs.readFileSync(path.join(__dirname, './command/get.file.py'), 'utf-8');
+
+        const toSend: string = text;
+
+        let part = "0";
+        let line: string[] = toSend.replace("{0}", fileName).replace("{2}", part).replace("{1}", "128").replace("{1}", "128").split("\n");
+
+        line.forEach(element => {
+            this.onReadyRaw.push(
+                () => {
+                    let thePort = this.port;
+                    console.log("Send: ", element);
+                    this.port.write(element);
+                    this.port.write([13]);
+                }
+            );
+        });
+
+        this.onReadyRaw.push(
+            () => {
+
+                this.port.write("import os");
+                this.port.write([13]);
+                this.port.write("import ubinascii");
+                this.port.write([13]);
+                this.port.write("sys.stdout.write(ubinascii.hexlify(str(os.stat('" + fileName + "')[6])))");
+                this.port.write([0x04]);//Ctrl+D
+                this.port.write([13]);
+            }
+        );
+
+
+        this.waitingFor = (data: string) => {
+            //formato: ['foo.barr','bar.py']
+
+            console.log(data);
+            if (parseInt(data) <= 512) {
+                this.getFile(fileName);
+                return;
+            }
+
+            //Aca se obtiene el archivo por parte
+            let partes = Math.ceil(parseInt(data) / 128);
+
+
+
+            this.waitingFor = (data: string) => {
+                //formato: ['foo.barr','bar.py']
+                const content = data;
+
+                this.emit("FileContent", { path: fileName, contenido: content });
+
+            };
+            this.EnterRawMode();
+            this.getFilePart(fileName, 0);
+
+        };
+
+
+
+
+        this.Enter();
+        this.CtrlC();
+        this.CtrlC();
         this.EnterRawMode();
     }
 
@@ -509,17 +571,7 @@ export class Dispositivo extends EventEmitter {
         line.forEach(element => {
             this.onReadyRaw.push(
                 () => {
-                    let thePort = this.port;
 
-                    /* let b = Buffer.from(element);
-                    b.forEach(num => {
-                        if (num == Buffer.from('\b').readUint8()) {
-                            thePort.write([127]);
-
-                        } else {
-                            thePort.write([num]);
-                        }
-                    }); */
                     console.log("Send: ", element);
                     this.port.write(element);
                     this.port.write([13]);
@@ -529,10 +581,9 @@ export class Dispositivo extends EventEmitter {
 
         this.onReadyRaw.push(
             () => {
-                let thePort = this.port;
                 console.log("Send: Ctrl+D");
                 //this.port.write([127, 13]);
-                this.port.write([0x04]);//Ctrl+D
+                this.CtrlD();
                 this.ExitRawMode();
 
                 this.port.write([13]);
@@ -551,9 +602,9 @@ export class Dispositivo extends EventEmitter {
         };
 
 
-        this.port.write('\r');//Enter
-        this.port.write([3]);   //Ctrl+C
-        this.port.write([3]);//Ctrl+C
+        this.Enter();
+        this.CtrlC();
+        this.CtrlC();
         this.EnterRawMode();
     }
 
@@ -566,69 +617,101 @@ export class Dispositivo extends EventEmitter {
         this.port.write("\r\x01");//Enter Ctrl+A - para ingresar en modo raw
     }
 
-
-    private dataReceive(byte: number) {
-        this.last = byte;
+    private CtrlC() {
+        this.port.write([3]);//Ctrl+C
+    }
+    private CtrlD() {
+        this.port.write([0x04]);//Ctrl+D
+    }
+    private Enter() {
+        this.port.write('\r');//Ctrl+C
     }
 
-    private WaitUntilChangeRead(): number | null {
-        let data: number | null = null
-        if (this.port.isOpen) {
 
 
-            data = this.last;
+    public sendTest() {
 
-            while (this.port.readableLength > 0) {
-                this.port.resume();
+        this.onReadyQueqe.push(
+            () => {
+                this.port.write("import machine");
+                this.port.write([13]);
             }
+        );
 
+        this.onReadyQueqe.push(
+            () => {
+                this.port.write("led = machine.Pin(25,machine.Pin.OUT)");
+                this.port.write([13]);
+            }
+        );
 
-            return data;
-        }
-
-        return null;
-    }
-
-    private checkEnd(_toView: Buffer, toCheck: Buffer): boolean {
-
-        let toView = Buffer.from(_toView);
-
-        toCheck.reverse();
-        toView.reverse();
-
-        if (toView.length < toCheck.length)
-            return false;
-
-
-        for (let i = 0; i < toCheck.length; i++) {
-            if (toCheck.readUint8() == toView.readUint8())
-                continue;
-
-            return false;
-        }
-
-        return true;
-
-    }
-
-    private checkStart(_toView: Buffer, toCheck: Buffer): boolean {
-
-        let toView = Buffer.from(_toView);
-
-        if (toView.length < toCheck.length)
-            return false;
-
-
-        for (let i = 0; i < toCheck.length; i++) {
-            if (toCheck.readUint8() == toView.readUint8())
-                continue;
-
-            return false;
-        }
-
-        return true;
+        this.onReadyQueqe.push(
+            () => {
+                this.port.write("led.toggle()");
+                this.port.write([13]);
+            }
+        );
+        this.onReadyQueqe.push(
+            () => {
+                this.port.write("led.toggle()");
+                this.port.write([13]);
+            }
+        );
+        this.onReadyQueqe.push(
+            () => {
+                this.port.write("led.toggle()");
+                this.port.write([13]);
+            }
+        );
+        //console.log(this.onReadyQueqe.length);
+        this.port.write('\r');
+        this.port.write([3]);
+        this.port.write([3]);
 
     }
 }
 
 
+function Contiene(data: Buffer, arg1: string) {
+    const ori = Buffer.from(data);
+    return ori.includes(arg1);
+}
+
+function checkEnd(_toView: Buffer, toCheck: Buffer): boolean {
+
+    let toView = Buffer.from(_toView);
+
+    toCheck.reverse();
+    toView.reverse();
+
+    if (toView.length < toCheck.length)
+        return false;
+
+    for (let i = 0; i < toCheck.length; i++) {
+        if (toCheck.readUint8() == toView.readUint8())
+            continue;
+
+        return false;
+    }
+
+    return true;
+}
+
+function checkStart(_toView: Buffer, toCheck: Buffer): boolean {
+
+    let toView = Buffer.from(_toView);
+
+    if (toView.length < toCheck.length)
+        return false;
+
+
+    for (let i = 0; i < toCheck.length; i++) {
+        if (toCheck.readUint8() == toView.readUint8())
+            continue;
+
+        return false;
+    }
+
+    return true;
+
+}
