@@ -3,7 +3,7 @@
   "displayName": "mpShell",
   "description": "Python REPL shell",
   "icon": "icon.jpg",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.65.0"
   },
@@ -58,6 +58,10 @@
       {
         "command": "mpshell.sendcurrentfile",
         "title": "Send current file"
+      },
+      {
+        "command": "mpshell.canceljobinprogress",
+        "title": "Cancel job in Progress"
       }
     ],
     "menus": {
@@ -77,6 +81,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
+    "pack": "vsce package",
     "compile": "copy \"%CD%\\src\\command\\*.*\" \"%CD%\\out\\command\\\" && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",

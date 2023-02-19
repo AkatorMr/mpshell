@@ -18,6 +18,7 @@ const SELECT_PORT_ID = "mpshell.selectport";
 const SEND_CURRENT_FILE_ID = "mpshell.sendcurrentfile";
 const LIST_FILES_ID = "mpshell.listfiles";
 const SOFT_RESET_ID = "mpshell.soft_reset";
+const CANCEL_JOB_IN_PROGRESS = "mpshell.canceljobinprogress";
 
 
 
@@ -234,7 +235,14 @@ function checkConfigFile(workFolder: string) {
 }
 
 function isConnected(): boolean {
+
+	if (!globalReady) {
+		testConnection();
+	}
 	return globalReady;
+}
+function warningJobInProgress() {
+	vscode.window.showWarningMessage('Trabajo en progreso, espere a que finalice o cancelelo.');
 }
 
 async function CambiarConfig() {
@@ -248,20 +256,27 @@ async function Connect() {
 
 }
 
+
+
+
 async function ListFiles() {
 	if (!isConnected()) return;
 	globalDevice.openPort();
-	globalDevice.listFiles()
+	if (!globalDevice.listFiles()) {
+		warningJobInProgress();
+	}
 
 	//UpdateListFiles evento
 	//ListFilesHandler(["uno", "dos", "tres"]);
 }
 
-function ListFilesHandler(files: string[]) {
+function ListFilesHandler(files: { name: string, size: string }[]) {
 	//vscode.window.createWebviewPanel("webView","Lista de archivos",)
 	console.log(files);
-	listaDeArchivos.updateList(files);
+	let nombres = files.map(file => { return file.name });
+	listaDeArchivos.updateList(nombres);
 	globalDevice.closePort();
+
 }
 
 
@@ -279,7 +294,7 @@ async function SendcurrentFile() {
 	console.log(fileName);
 	//Subir current file
 	globalDevice.openPort();
-	globalDevice.sendFile(fileName, contenido);
+	if (!globalDevice.sendFile(fileName, contenido)) warningJobInProgress();
 	/* setTimeout(() => {
 		globalDevice.closePort();
 	}, 2000); */
@@ -306,7 +321,9 @@ async function ObtenerArchivo(archivo: Archivo) {
 	if (!isConnected()) return;
 
 	globalDevice.openPort();
-	globalDevice.getFile(path);
+	if (!globalDevice.getFile(path)) {
+		warningJobInProgress();
+	}
 }
 async function EliminarArchivo(archivo: Archivo) {
 	let path = archivo.path;
@@ -314,7 +331,8 @@ async function EliminarArchivo(archivo: Archivo) {
 	if (!isConnected()) return;
 
 	globalDevice.openPort();
-	globalDevice.deleteFile(path);
+	if (!globalDevice.deleteFile(path))
+		warningJobInProgress();
 }
 
 function FileContentHandler(archi: { path: string, contenido: string }) {
@@ -407,10 +425,19 @@ export function activate(context: vscode.ExtensionContext) {
 		SOFT_RESET_ID,
 		() => {
 			globalDevice.openPort();
-			globalDevice.softReset();
+			if (!globalDevice.softReset()) {
+				warningJobInProgress()
+			}
+		}
+	);
+	let cancelJobInProgress = vscode.commands.registerCommand(
+		CANCEL_JOB_IN_PROGRESS,
+		() => {
+			globalDevice.CancelRunningJobs();
 		}
 	);
 
+	context.subscriptions.push(cancelJobInProgress);
 	context.subscriptions.push(send_current_file);
 	context.subscriptions.push(softReset);
 	context.subscriptions.push(changesettin);

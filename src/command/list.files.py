@@ -26,7 +26,7 @@ def listdir(directory):
 fileListCompleta=''
 for fileName in listdir('/'):
     if fileListCompleta=='':
-        fileListCompleta=fileName+" "+os.stat(fileName)[6]
+        fileListCompleta=fileName+";"+str(os.stat(fileName)[6])
     else:
-        fileListCompleta=fileListCompleta+','+fileName+" "+os.stat(fileName)[6]
+        fileListCompleta=fileListCompleta+','+fileName+";"+str(os.stat(fileName)[6])
 sys.stdout.write(ubinascii.hexlify(fileListCompleta))

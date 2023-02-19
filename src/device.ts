@@ -25,6 +25,8 @@ export class Dispositivo extends EventEmitter {
     private bufferCompleto: Buffer = Buffer.alloc(100 * 1024);
     private offset: number = 0;
 
+    private jobInProgress = false;
+
 
     constructor(_port: SerialPort) {
         super();
@@ -81,6 +83,7 @@ export class Dispositivo extends EventEmitter {
         this.bufferCompleto.fill('\0');
         this.offset = 0;
         this.port.close();
+        this.jobInProgress = false;
     }
     /** Listeners */
 
@@ -242,31 +245,16 @@ export class Dispositivo extends EventEmitter {
 
 
 
-    private hexlify(data: string): string {
-        const change = "0123456789abcdef";
 
-        let buf = Buffer.from(data);
-
-        let ret = Buffer.alloc(data.length * 2);
-
-        for (let i = 0; i < buf.length; i++) {
-            let num = buf.readUInt8(i);
-            let dig = num % 16;
-            num = num - dig;
-            num = num / 16;
-            //console.log(change.charAt(num), change.charAt(dig));
-            ret.write(change.charAt(num), i * 2);
-            ret.write(change.charAt(dig), i * 2 + 1);
-
-        }
-
-        return ret.toString();
-    }
     /**sendFile
      * @param path del fichero
      * @param contenido del fichero
+     * @returns true if can sendFile
      */
-    public sendFile(path: string, contenido: string) {
+    public sendFile(path: string, contenido: string): boolean {
+
+        if (this.jobInProgress)
+            return false;
 
         let line: string[] = contenido.split("\n");
         console.log("Antes de enviar");
@@ -285,7 +273,7 @@ export class Dispositivo extends EventEmitter {
         line.forEach(element => {
             this.onReadyRaw.push(
                 () => {
-                    let datos = "f.write(ubinascii.unhexlify('" + this.hexlify(element + "\n") + "'))";
+                    let datos = "f.write(ubinascii.unhexlify('" + hexlify(element + "\n") + "'))";
                     console.log(datos);
                     this.port.write(datos);
                     this.Enter();
@@ -311,19 +299,23 @@ export class Dispositivo extends EventEmitter {
                 this.ExitRawMode();
 
                 this.Enter();
+                this.jobInProgress = false;
             }
         );
 
 
-
+        this.jobInProgress = true;
         this.Enter();
         this.CtrlC();
         this.CtrlC();
         this.EnterRawMode();
         console.log("Enviando");
+        return true;
     }
 
-    public deleteFile(fileName: string) {
+    public deleteFile(fileName: string): boolean {
+        if (this.jobInProgress)
+            return false;
 
         this.onReadyRaw.push(
             () => {
@@ -358,17 +350,19 @@ export class Dispositivo extends EventEmitter {
             const content = data;
 
             this.emit("FilesChanges");
-
+            this.jobInProgress = false;
         };
 
-
+        this.jobInProgress = true;
         this.port.write('\r');//Enter
         this.port.write([3]);   //Ctrl+C
         this.port.write([3]);//Ctrl+C
         this.EnterRawMode();
+
+        return true;
     }
 
-    public getFileSize(fileName: string) {
+    private getFileSize(fileName: string) {
 
         this.onReadyRaw.push(
             () => {
@@ -409,18 +403,29 @@ export class Dispositivo extends EventEmitter {
         this.EnterRawMode();
     }
 
-    public softReset() {
+    public softReset(): boolean {
+        if (this.jobInProgress)
+            return false;
+
         this.Enter();
         this.CtrlC();
         this.CtrlC();
-        this.port.write("machine.soft_reset()\n");
+        this.port.write("import machine\nmachine.soft_reset()\n");
+
+        return true;
 
     }
 
     /**getFile(fileName) 
      * @param fileName Path del fichero que se quiere obtener
+     * @returns true if can adquire file
      */
-    public getFile(fileName: string) {
+    public getFile(fileName: string): boolean {
+
+        if (this.jobInProgress) {
+            return false;
+        }
+
         //const toSend: string = require("./command/get.file.py");
         const text = fs.readFileSync(path.join(__dirname, './command/get.file.py'), 'utf-8');
 
@@ -456,16 +461,19 @@ export class Dispositivo extends EventEmitter {
             const content = data;
 
             this.emit("FileContent", { path: fileName, contenido: content });
-
+            this.jobInProgress = false;
         };
 
-
+        this.jobInProgress = true;
         this.Enter();
         this.CtrlC();
         this.CtrlC();
         this.EnterRawMode();
+
+        return true;
     }
 
+    //@deprecated
     /**getFilePart(fileName,part) 
      * @param fileName Path del fichero que se quiere obtener
      * @param part numero que indica la parte
@@ -559,7 +567,12 @@ export class Dispositivo extends EventEmitter {
         this.EnterRawMode();
     }
 
-    public listFiles() {
+    public listFiles(): boolean {
+
+        if (this.jobInProgress) {
+            return false;
+        }
+
         let toSend: string;
 
         const text = fs.readFileSync(path.join(__dirname, './command/list.files.py'), 'utf-8');
@@ -592,20 +605,36 @@ export class Dispositivo extends EventEmitter {
         );
 
         this.waitingFor = (data: string) => {
-            //formato: ['foo.barr','bar.py']
+            //formato: foo.barr;550,bar.py;1024
             /* data = data.substring(1, data.length - 2);
             data = data.replace("'", ""); */
             let list: string[] = data.split(",");
-            console.log("waitFor", list);
-            this.emit("UpdateListFiles", list);
+            let files: { name: string, size: string }[] = [];
+            for (let i = 0; i < list.length; i++) {
+                let part = list[i].split(";");
+                files.push({ name: part[0], size: part[1] });
+            }
+            console.log("waitFor", files);
+            this.jobInProgress = false;
+            this.emit("UpdateListFiles", files);
 
         };
 
-
+        this.jobInProgress = true;
         this.Enter();
         this.CtrlC();
         this.CtrlC();
         this.EnterRawMode();
+
+        return true;
+    }
+
+    /* Jobs Control  */
+
+    public CancelRunningJobs() {
+        this.waitingFor = () => { };
+        this.onReadyQueqe = new Array<Function>();
+        this.jobInProgress = false;
     }
 
     /**Control function */
@@ -714,4 +743,26 @@ function checkStart(_toView: Buffer, toCheck: Buffer): boolean {
 
     return true;
 
+}
+
+
+function hexlify(data: string): string {
+    const change = "0123456789abcdef";
+
+    let buf = Buffer.from(data);
+
+    let ret = Buffer.alloc(data.length * 2);
+
+    for (let i = 0; i < buf.length; i++) {
+        let num = buf.readUInt8(i);
+        let dig = num % 16;
+        num = num - dig;
+        num = num / 16;
+        //console.log(change.charAt(num), change.charAt(dig));
+        ret.write(change.charAt(num), i * 2);
+        ret.write(change.charAt(dig), i * 2 + 1);
+
+    }
+
+    return ret.toString();
 }
